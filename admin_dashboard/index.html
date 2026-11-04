@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartFlow Admin - Intelligent Traffic Management Dashboard</title>
+  
+  <!-- Leaflet CSS for OpenStreetMap -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">🚦</div>
+      <div>
+        <h1>SmartFlow Admin</h1>
+        <span>AI-Powered Intelligent Traffic Management System</span>
+      </div>
+    </div>
+
+    <!-- Junction Select & WebSocket Status -->
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label for="junction-select" style="font-size: 0.75rem; color: var(--text-muted); font-weight: bold;">JUNCTION:</label>
+        <select id="junction-select" style="background: #1e293b; color: #fff; border: 1px solid #334155; padding: 6px 12px; border-radius: 8px; font-weight: bold; font-size: 0.8rem; cursor: pointer;">
+          <option value="">Loading junctions...</option>
+        </select>
+      </div>
+
+      <div id="ws-status" class="badge badge-green">● Connected</div>
+    </div>
+  </header>
+
+  <div class="main-container">
+    
+    <!-- LEFT COLUMN: Live Map & 4-Way Traffic Signal State -->
+    <div>
+      
+      <!-- Interactive OpenStreetMap -->
+      <div class="card">
+        <div class="card-title">
+          <span>Live Junction Geofence Map (OpenStreetMap)</span>
+          <span id="zone-legend" style="font-size: 0.7rem; color: var(--text-muted);">
+            Inner (150m) • Mid (300m) • Outer (500m)
+          </span>
+        </div>
+        <div id="map-container"></div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 8px; display: flex; justify-content: space-between;">
+          <span>💡 Click anywhere on map inside circle to spawn a simulated participating commuter</span>
+          <span id="active-count-display">0 vehicles tracked</span>
+        </div>
+      </div>
+
+      <!-- Virtual Traffic Signal 4-Way Lamp Visualizer -->
+      <div class="card">
+        <div class="card-title">
+          <span>Virtual Traffic Signal State Machine</span>
+          <span id="phase-badge" class="badge badge-green">NORTH_SOUTH_GREEN</span>
+        </div>
+
+        <div class="signal-box">
+          <!-- North-South Signal Lamp -->
+          <div style="text-align: center;">
+            <div style="font-size: 0.75rem; font-weight: bold; color: var(--text-muted); margin-bottom: 6px;">NORTH–SOUTH</div>
+            <div class="traffic-light-head">
+              <div id="ns-red" class="lamp lamp-red"></div>
+              <div id="ns-yellow" class="lamp lamp-yellow"></div>
+              <div id="ns-green" class="lamp lamp-green active"></div>
+            </div>
+            <div id="ns-countdown" class="countdown-display">24s</div>
+          </div>
+
+          <!-- Intersection Status Center -->
+          <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; max-width: 200px; text-align: center;">
+            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Priority Recommendation</div>
+            <div id="priority-corridor-text" style="font-size: 1.1rem; font-weight: 800; color: #38bdf8; margin: 4px 0;">NORTH</div>
+            <div id="signal-duration-text" style="font-size: 0.75rem; color: var(--text-muted);">Phase Allocation: 24s</div>
+            <button id="btn-force-step" class="btn btn-outline" style="margin-top: 10px; font-size: 0.7rem; padding: 4px 10px;">
+              ⚡ Force Step Phase
+            </button>
+          </div>
+
+          <!-- East-West Signal Lamp -->
+          <div style="text-align: center;">
+            <div style="font-size: 0.75rem; font-weight: bold; color: var(--text-muted); margin-bottom: 6px;">EAST–WEST</div>
+            <div class="traffic-light-head">
+              <div id="ew-red" class="lamp lamp-red active"></div>
+              <div id="ew-yellow" class="lamp lamp-yellow"></div>
+              <div id="ew-green" class="lamp lamp-green"></div>
+            </div>
+            <div id="ew-countdown" class="countdown-display">--</div>
+          </div>
+        </div>
+
+        <!-- 4 Corridor Queue Matrix -->
+        <div class="corridors-grid">
+          <!-- North -->
+          <div class="corridor-item" id="corridor-card-NORTH">
+            <div class="corridor-header">
+              <span>North Corridor</span>
+              <span id="badge-NORTH" class="badge badge-green">CLEAR</span>
+            </div>
+            <div class="corridor-stats">
+              <div>Vehicles: <strong id="count-NORTH">0</strong></div>
+              <div>&lt;150m Queue: <strong id="inner-NORTH">0</strong></div>
+              <div>Avg Wait: <strong id="wait-NORTH">0s</strong></div>
+              <div>Priority: <strong id="score-NORTH">0.0</strong></div>
+            </div>
+          </div>
+
+          <!-- South -->
+          <div class="corridor-item" id="corridor-card-SOUTH">
+            <div class="corridor-header">
+              <span>South Corridor</span>
+              <span id="badge-SOUTH" class="badge badge-green">CLEAR</span>
+            </div>
+            <div class="corridor-stats">
+              <div>Vehicles: <strong id="count-SOUTH">0</strong></div>
+              <div>&lt;150m Queue: <strong id="inner-SOUTH">0</strong></div>
+              <div>Avg Wait: <strong id="wait-SOUTH">0s</strong></div>
+              <div>Priority: <strong id="score-SOUTH">0.0</strong></div>
+            </div>
+          </div>
+
+          <!-- East -->
+          <div class="corridor-item" id="corridor-card-EAST">
+            <div class="corridor-header">
+              <span>East Corridor</span>
+              <span id="badge-EAST" class="badge badge-green">CLEAR</span>
+            </div>
+            <div class="corridor-stats">
+              <div>Vehicles: <strong id="count-EAST">0</strong></div>
+              <div>&lt;150m Queue: <strong id="inner-EAST">0</strong></div>
+              <div>Avg Wait: <strong id="wait-EAST">0s</strong></div>
+              <div>Priority: <strong id="score-EAST">0.0</strong></div>
+            </div>
+          </div>
+
+          <!-- West -->
+          <div class="corridor-item" id="corridor-card-WEST">
+            <div class="corridor-header">
+              <span>West Corridor</span>
+              <span id="badge-WEST" class="badge badge-green">CLEAR</span>
+            </div>
+            <div class="corridor-stats">
+              <div>Vehicles: <strong id="count-WEST">0</strong></div>
+              <div>&lt;150m Queue: <strong id="inner-WEST">0</strong></div>
+              <div>Avg Wait: <strong id="wait-WEST">0s</strong></div>
+              <div>Priority: <strong id="score-WEST">0.0</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: Simulation Controls & Junction Registry -->
+    <div>
+      
+      <!-- Traffic Simulation Module -->
+      <div class="card">
+        <div class="card-title">
+          <span>Traffic Simulation Engine</span>
+          <span class="badge badge-amber">Interactive Demo</span>
+        </div>
+
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px;">
+          Simulate vehicles approaching the junction to evaluate real-time priority scores, anti-starvation rules, and dynamic signal phase scaling.
+        </p>
+
+        <!-- Scenario Presets -->
+        <div style="font-size: 0.75rem; font-weight: bold; color: var(--text-main); margin-bottom: 6px;">
+          Commute Presets:
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-outline" onclick="applyPreset('morning_rush')">🌅 Morning Rush (NS Heavy)</button>
+          <button class="btn btn-outline" onclick="applyPreset('evening_rush')">🌇 Evening Rush (EW Heavy)</button>
+          <button class="btn btn-amber" onclick="applyPreset('bottleneck')">⚠️ Single-Lane Jam</button>
+          <button class="btn btn-red" onclick="applyPreset('emergency')">🚨 Emergency SOS</button>
+          <button class="btn btn-outline" onclick="applyPreset('balanced')">⚖️ Balanced Flow</button>
+        </div>
+
+        <!-- Manual Inflow Trigger -->
+        <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; font-weight: bold; color: var(--text-main); margin-bottom: 8px;">
+            Inject Single Vehicle:
+          </div>
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <select id="inject-corridor" style="flex: 1; background: #0f172a; color: #fff; border: 1px solid #334155; padding: 6px 10px; border-radius: 6px; font-size: 0.75rem;">
+              <option value="NORTH">North Corridor</option>
+              <option value="SOUTH">South Corridor</option>
+              <option value="EAST">East Corridor</option>
+              <option value="WEST">West Corridor</option>
+            </select>
+            <button class="btn" onclick="injectVehicle(false)">+ Add Car</button>
+            <button class="btn btn-red" onclick="injectVehicle(true)">+ Ambulance (SOS)</button>
+          </div>
+          <button class="btn btn-outline" style="width: 100%; justify-content: center;" onclick="clearSimulation()">
+            🗑️ Clear Junction Simulation
+          </button>
+        </div>
+      </div>
+
+      <!-- Junction Registry & Geofence Details -->
+      <div class="card">
+        <div class="card-title">
+          <span>Junction Configuration</span>
+          <span id="junc-code-badge" class="badge badge-green">NYC_GCT_42</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); space-y: 6px;">
+          <div style="margin-bottom: 4px;">Name: <strong id="junc-name" style="color: var(--text-main);">Grand Central & 42nd St</strong></div>
+          <div style="margin-bottom: 4px;">Address: <strong id="junc-address" style="color: var(--text-main);">Park Ave & E 42nd St, New York</strong></div>
+          <div style="margin-bottom: 4px;">Coordinates: <strong id="junc-coords" style="color: var(--text-main);">40.7516, -73.9767</strong></div>
+          <div style="margin-bottom: 4px;">Outer Radius: <strong id="junc-radius" style="color: var(--text-main);">500m</strong></div>
+          <div style="margin-bottom: 4px;">Inner Stop Line: <strong id="junc-inner" style="color: var(--text-main);">150m</strong></div>
+        </div>
+      </div>
+
+      <!-- Safety Disclaimer -->
+      <div class="disclaimer-box">
+        <strong>⚠️ SAFETY DISCLAIMER:</strong> SmartFlow virtual traffic signals are for testing and demonstration only. They do NOT interface with physical municipal traffic signals and must never instruct drivers to override real-world road signals.
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="js/api.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/signals.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
+
