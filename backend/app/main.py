@@ -1,11 +1,12 @@
 import asyncio
 import logging
+import os
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse
-import os
 
 from app.config import settings
 from app.database import connect_to_mongo, close_mongo_connection, db_manager
@@ -29,16 +30,18 @@ async def signal_timer_background_task():
         try:
             junctions_list = await list_junctions()
             for j in junctions_list:
-                controller = signal_manager.get_or_create(j.id, j.junction_code)
+                j_id = j.id if hasattr(j, "id") else j["id"]
+                j_code = j.junction_code if hasattr(j, "junction_code") else j["junction_code"]
+                controller = signal_manager.get_or_create(j_id, j_code)
                 changed = controller.update_tick()
                 
                 # Broadcast every 1s tick or upon phase change
-                summaries = traffic_service.get_corridor_summaries(j.id)
+                summaries = traffic_service.get_corridor_summaries(j_id)
                 await ws_manager.broadcast_junction_update(
-                    junction_id=j.id,
+                    junction_id=j_id,
                     data={
                         "type": "SIGNAL_TICK",
-                        "junction_id": j.id,
+                        "junction_id": j_id,
                         "phase_changed": changed,
                         "signal_state": controller.to_schema().model_dump(),
                         "corridors": {c.value: summaries[c].model_dump() for c in summaries},
@@ -98,12 +101,22 @@ async def lifespan(app: FastAPI):
             await create_junction(d)
         logger.info("Default SmartFlow urban junctions seeded.")
 
-    # Start background signal ticker
-    bg_task = asyncio.create_task(signal_timer_background_task())
-    yield
-    # Shutdown
-    bg_task.cancel()
-    await close_mongo_connection()
+    # Start background signal ticker if enabled and not running under tests
+    bg_task = None
+    is_testing = os.getenv("TESTING", "false").lower() in ("true", "1") or "pytest" in sys.modules
+    if not is_testing and os.getenv("ENABLE_BACKGROUND_TICKER", "true").lower() in ("true", "1"):
+        bg_task = asyncio.create_task(signal_timer_background_task())
+
+    try:
+        yield
+    finally:
+        if bg_task:
+            bg_task.cancel()
+            try:
+                await bg_task
+            except asyncio.CancelledError:
+                pass
+        await close_mongo_connection()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

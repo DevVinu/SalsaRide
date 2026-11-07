@@ -26,6 +26,11 @@ class Database:
 db_manager = Database()
 
 async def connect_to_mongo():
+    if not settings.ENABLE_MONGO:
+        logger.info("MongoDB disabled by configuration (ENABLE_MONGO=False). Operating in fast In-Memory Store mode.")
+        db_manager.is_connected = False
+        return
+
     try:
         logger.info(f"Connecting to MongoDB at {settings.MONGODB_URL}...")
         client = AsyncIOMotorClient(

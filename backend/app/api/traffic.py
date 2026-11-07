@@ -28,10 +28,14 @@ async def ingest_location_ping(ping: LocationPing):
     min_dist = float("inf")
 
     for j in junctions:
+        j_lat = j.latitude if hasattr(j, "latitude") else j["latitude"]
+        j_lon = j.longitude if hasattr(j, "longitude") else j["longitude"]
+        j_radius = j.detection_radius_meters if hasattr(j, "detection_radius_meters") else j.get("detection_radius_meters", 500)
+
         dist = calculate_haversine_distance(
-            ping.latitude, ping.longitude, j.latitude, j.longitude
+            ping.latitude, ping.longitude, j_lat, j_lon
         )
-        if dist <= j.detection_radius_meters and dist < min_dist:
+        if dist <= j_radius and dist < min_dist:
             min_dist = dist
             detected_junction = j
 
@@ -42,10 +46,15 @@ async def ingest_location_ping(ping: LocationPing):
             "distance_to_nearest": round(min_dist, 1) if min_dist != float("inf") else None,
         }
 
+    j_dict = detected_junction.model_dump() if hasattr(detected_junction, "model_dump") else dict(detected_junction)
+    j_id = detected_junction.id if hasattr(detected_junction, "id") else detected_junction["id"]
+    j_code = detected_junction.junction_code if hasattr(detected_junction, "junction_code") else detected_junction["junction_code"]
+    j_name = detected_junction.name if hasattr(detected_junction, "name") else detected_junction["name"]
+
     # Record observation
     obs_result = traffic_service.record_user_ping(
         user_id=user_id,
-        junction=detected_junction.model_dump(),
+        junction=j_dict,
         user_lat=ping.latitude,
         user_lon=ping.longitude,
         speed_kmh=ping.speed_kmh,
@@ -54,8 +63,8 @@ async def ingest_location_ping(ping: LocationPing):
 
     # Update virtual signal state machine
     controller = signal_manager.get_or_create(
-        junction_id=detected_junction.id,
-        junction_code=detected_junction.junction_code,
+        junction_id=j_id,
+        junction_code=j_code,
     )
     controller.update_tick()
 
@@ -69,22 +78,22 @@ async def ingest_location_ping(ping: LocationPing):
 
     # Broadcast update asynchronously
     await ws_manager.broadcast_junction_update(
-        junction_id=detected_junction.id,
+        junction_id=j_id,
         data={
             "type": "TRAFFIC_UPDATE",
-            "junction_id": detected_junction.id,
+            "junction_id": j_id,
             "signal_state": controller.to_schema().model_dump(),
             "corridors": {
-                c.value: traffic_service.get_corridor_summaries(detected_junction.id)[c].model_dump()
-                for c in traffic_service.get_corridor_summaries(detected_junction.id)
+                c.value: traffic_service.get_corridor_summaries(j_id)[c].model_dump()
+                for c in traffic_service.get_corridor_summaries(j_id)
             },
         },
     )
 
     return {
         "status": "IN_ZONE",
-        "junction_id": detected_junction.id,
-        "junction_name": detected_junction.name,
+        "junction_id": j_id,
+        "junction_name": j_name,
         "observation": obs_result,
         "advisory": advisory.model_dump() if advisory else None,
     }
@@ -93,13 +102,16 @@ async def ingest_location_ping(ping: LocationPing):
 @router.get("/{junction_id}", response_model=JunctionTrafficStatus)
 async def get_junction_traffic_status(junction_id: str):
     j = await get_junction(junction_id)
-    summaries = traffic_service.get_corridor_summaries(j.id)
+    j_id = j.id if hasattr(j, "id") else j["id"]
+    j_code = j.junction_code if hasattr(j, "junction_code") else j["junction_code"]
+    j_name = j.name if hasattr(j, "name") else j["name"]
+    summaries = traffic_service.get_corridor_summaries(j_id)
     total_vehicles = sum(s.vehicle_count for s in summaries.values())
 
     return JunctionTrafficStatus(
-        junction_id=j.id,
-        junction_code=j.junction_code,
-        name=j.name,
+        junction_id=j_id,
+        junction_code=j_code,
+        name=j_name,
         total_participating_vehicles=total_vehicles,
         corridors={k.value: v for k, v in summaries.items()},
         last_updated=datetime.utcnow(),
@@ -109,8 +121,9 @@ async def get_junction_traffic_status(junction_id: str):
 @router.get("/{junction_id}/participants")
 async def get_junction_participants(junction_id: str):
     j = await get_junction(junction_id)
+    j_id = j.id if hasattr(j, "id") else j["id"]
     return {
-        "junction_id": j.id,
-        "participants": traffic_service.get_active_participants_list(j.id),
+        "junction_id": j_id,
+        "participants": traffic_service.get_active_participants_list(j_id),
     }
 

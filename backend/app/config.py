@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     
-    # MongoDB
+    # MongoDB (defaults to False for fast standalone development, True when live MongoDB daemon is running)
+    ENABLE_MONGO: bool = os.getenv("ENABLE_MONGO", "false").lower() in ("true", "1")
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     DATABASE_NAME: str = os.getenv("DATABASE_NAME", "smartflow_traffic_db")
     
@@ -32,10 +33,11 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["*"]
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": True,
+        "extra": "ignore"
+    }
 
 
 settings = Settings()
-

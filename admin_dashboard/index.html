@@ -204,6 +204,40 @@
         </div>
       </div>
 
+      <!-- Real-Time Device GPS Ingress -->
+      <div class="card" style="border: 1px solid #38bdf8;">
+        <div class="card-title">
+          <span>📡 Live Device GPS Ingress</span>
+          <span id="gps-status-badge" class="badge badge-outline">GPS Inactive</span>
+        </div>
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 10px;">
+          Stream your actual phone or computer GPS hardware into the SmartFlow traffic priority engine via the HTML5 Geolocation API.
+        </p>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <button id="btn-toggle-gps" class="btn" style="flex: 1; justify-content: center; background: #0284c7;" onclick="toggleRealGPS()">
+            🛰️ Start Real GPS Tracking
+          </button>
+        </div>
+        <div id="gps-telemetry" style="display: none; font-size: 0.75rem; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #1e293b;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span style="color: var(--text-muted);">Coordinates:</span>
+            <strong id="gps-coords" style="color: #38bdf8;">--</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span style="color: var(--text-muted);">Accuracy:</span>
+            <span id="gps-acc" style="color: var(--text-main);">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span style="color: var(--text-muted);">Speed:</span>
+            <span id="gps-speed" style="color: var(--text-main);">--</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-muted);">Zone Ingress:</span>
+            <strong id="gps-zone-status" style="color: #10b981;">--</strong>
+          </div>
+        </div>
+      </div>
+
       <!-- Junction Registry & Geofence Details -->
       <div class="card">
         <div class="card-title">

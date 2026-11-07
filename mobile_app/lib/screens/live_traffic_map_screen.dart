@@ -81,6 +81,32 @@ class LiveTrafficMapScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+
+                  // User Real GPS Location Marker
+                  if (juncProvider.currentPosition != null)
+                    Marker(
+                      point: LatLng(
+                        juncProvider.currentPosition!.latitude,
+                        juncProvider.currentPosition!.longitude,
+                      ),
+                      width: 40,
+                      height: 40,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blueAccent,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.6),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.navigation, color: Colors.white, size: 20),
+                      ),
+                    ),
                 ],
               ),
             ],
@@ -111,8 +137,12 @@ class LiveTrafficMapScreen extends StatelessWidget {
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       Text(
-                        'Outer Detection Geofence: 500m',
-                        style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
+                        juncProvider.gpsStatusMessage ?? 'Outer Detection Geofence: 500m',
+                        style: TextStyle(
+                          color: juncProvider.isTrackingGps ? AppConfig.signalGreen : Colors.grey.shade400,
+                          fontSize: 11,
+                          fontWeight: juncProvider.isTrackingGps ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
                     ],
                   ),
@@ -134,6 +164,86 @@ class LiveTrafficMapScreen extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+
+          // Floating Bottom GPS Control Bar & Advisory Banner
+          Positioned(
+            bottom: 24,
+            left: 16,
+            right: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // In-car Real-Time Advisory if active
+                if (juncProvider.currentAdvisory != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppConfig.cardDark.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: juncProvider.currentAdvisory!['lamp'] == 'GREEN'
+                            ? AppConfig.signalGreen
+                            : (juncProvider.currentAdvisory!['lamp'] == 'YELLOW'
+                                ? AppConfig.signalYellow
+                                : AppConfig.signalRed),
+                        width: 2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          juncProvider.currentAdvisory!['lamp'] == 'GREEN'
+                              ? '🟢'
+                              : (juncProvider.currentAdvisory!['lamp'] == 'YELLOW' ? '🟡' : '🔴'),
+                          style: const TextStyle(fontSize: 24),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'VIRTUAL SIGNAL: ${juncProvider.currentAdvisory!['lamp']}',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              Text(
+                                'Recommended Speed: ${juncProvider.currentAdvisory!['recommended_speed_kmh']} km/h',
+                                style: TextStyle(color: Colors.grey.shade300, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Live GPS Toggle Action Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: juncProvider.isTrackingGps ? Colors.redAccent : const Color(0xFF0284C7),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: Icon(juncProvider.isTrackingGps ? Icons.stop : Icons.satellite_alt),
+                    label: Text(
+                      juncProvider.isTrackingGps ? 'Stop Live GPS Stream' : '🛰️ Stream My Real Mobile GPS',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    onPressed: () {
+                      if (juncProvider.isTrackingGps) {
+                        juncProvider.stopLiveGpsTracking();
+                      } else {
+                        juncProvider.startLiveGpsTracking('MOBILE-DRIVER-01');
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         ],

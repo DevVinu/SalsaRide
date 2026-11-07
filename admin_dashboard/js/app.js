@@ -169,3 +169,103 @@ window.clearSimulation = async () => {
   refreshData();
 };
 
+// Real Device GPS Ingress
+let gpsWatchId = null;
+
+window.toggleRealGPS = () => {
+  if (gpsWatchId !== null) {
+    stopDeviceGps();
+  } else {
+    startDeviceGps();
+  }
+};
+
+function startDeviceGps() {
+  if (!navigator.geolocation) {
+    alert('Geolocation is not supported by your browser.');
+    return;
+  }
+
+  const badge = document.getElementById('gps-status-badge');
+  const btn = document.getElementById('btn-toggle-gps');
+  const panel = document.getElementById('gps-telemetry');
+
+  badge.className = 'badge badge-amber';
+  badge.textContent = 'Acquiring GPS...';
+  btn.textContent = '⏹️ Stop GPS Tracking';
+  btn.style.background = '#dc2626';
+  panel.style.display = 'block';
+
+  gpsWatchId = navigator.geolocation.watchPosition(
+    async (pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const acc = pos.coords.accuracy;
+      const speed = pos.coords.speed !== null ? (pos.coords.speed * 3.6).toFixed(1) : '0.0';
+
+      document.getElementById('gps-coords').textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+      document.getElementById('gps-acc').textContent = `±${Math.round(acc)}m`;
+      document.getElementById('gps-speed').textContent = `${speed} km/h`;
+
+      badge.className = 'badge badge-green';
+      badge.textContent = '● GPS Streaming';
+
+      // Send telemetry to SmartFlow API
+      try {
+        const res = await fetch(`${API_BASE}/traffic/ping`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: 'BROWSER-LIVE-GPS',
+            latitude: lat,
+            longitude: lon,
+            speed_kmh: parseFloat(speed) || 0.0,
+            accuracy_meters: acc,
+            heading_degrees: pos.coords.heading || null,
+          }),
+        });
+        const data = await res.json();
+        const zoneEl = document.getElementById('gps-zone-status');
+        if (data.status === 'IN_ZONE') {
+          zoneEl.textContent = `Approaching ${data.junction_name} (${data.observation.corridor} Corridor - ${Math.round(data.observation.distance_meters)}m)`;
+          zoneEl.style.color = '#10b981';
+          refreshData();
+        } else {
+          zoneEl.textContent = `Outside registered zones (${data.distance_to_nearest ? data.distance_to_nearest + 'm to nearest' : 'no nearby junction'})`;
+          zoneEl.style.color = '#94a3b8';
+        }
+      } catch (err) {
+        console.error('Failed to send GPS ping:', err);
+      }
+    },
+    (err) => {
+      badge.className = 'badge badge-red';
+      badge.textContent = 'GPS Error';
+      alert(`Location permission denied or unavailable: ${err.message}`);
+      stopDeviceGps();
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 1000,
+      timeout: 10000,
+    }
+  );
+}
+
+function stopDeviceGps() {
+  if (gpsWatchId !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  const badge = document.getElementById('gps-status-badge');
+  const btn = document.getElementById('btn-toggle-gps');
+  if (badge) {
+    badge.className = 'badge badge-outline';
+    badge.textContent = 'GPS Inactive';
+  }
+  if (btn) {
+    btn.textContent = '🛰️ Start Real GPS Tracking';
+    btn.style.background = '#0284c7';
+  }
+}
+

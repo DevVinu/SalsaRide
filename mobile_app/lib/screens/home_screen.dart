@@ -179,8 +179,37 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(
                     pos != null
                         ? 'Lat: ${pos.latitude.toStringAsFixed(4)}, Lon: ${pos.longitude.toStringAsFixed(4)} (Speed: ${(pos.speed * 3.6).toStringAsFixed(1)} km/h)'
-                        : 'Acquiring GPS fix (Simulated mode active)...',
+                        : 'GPS idle. Tap below to start real-time tracking.',
                     style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 38,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: juncProvider.isTrackingGps ? AppConfig.signalGreen : AppConfig.accentCyan,
+                        side: BorderSide(
+                          color: juncProvider.isTrackingGps ? AppConfig.signalGreen : AppConfig.accentCyan,
+                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: Icon(
+                        juncProvider.isTrackingGps ? Icons.sensors : Icons.play_arrow,
+                        size: 18,
+                      ),
+                      label: Text(
+                        juncProvider.isTrackingGps ? '● Live GPS Streaming (Active)' : 'Start Real Mobile GPS Stream',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () {
+                        if (juncProvider.isTrackingGps) {
+                          juncProvider.stopLiveGpsTracking();
+                        } else {
+                          juncProvider.startLiveGpsTracking('MOBILE-USER-01');
+                        }
+                      },
+                    ),
                   ),
                 ],
               ),

@@ -34,11 +34,16 @@ async def find_nearby_junctions(
     nearby = []
 
     for j in all_junctions:
-        dist = calculate_haversine_distance(latitude, longitude, j.latitude, j.longitude)
+        j_lat = j.latitude if hasattr(j, "latitude") else j["latitude"]
+        j_lon = j.longitude if hasattr(j, "longitude") else j["longitude"]
+        j_radius = j.detection_radius_meters if hasattr(j, "detection_radius_meters") else j.get("detection_radius_meters", 500)
+        j_dict = j.model_dump() if hasattr(j, "model_dump") else dict(j)
+
+        dist = calculate_haversine_distance(latitude, longitude, j_lat, j_lon)
         if dist <= max_radius_meters:
-            is_inside_detection = dist <= j.detection_radius_meters
+            is_inside_detection = dist <= j_radius
             nearby.append({
-                **j.model_dump(),
+                **j_dict,
                 "distance_to_user_meters": dist,
                 "is_inside_detection_zone": is_inside_detection,
             })
@@ -90,19 +95,22 @@ async def create_junction(junction_in: JunctionCreate):
 @router.put("/{junction_id}", response_model=JunctionResponse)
 async def update_junction(junction_id: str, update_in: JunctionUpdate):
     j = await get_junction(junction_id)
+    j_id = j.id if hasattr(j, "id") else j["id"]
+    j_lat = j.latitude if hasattr(j, "latitude") else j["latitude"]
+    j_lon = j.longitude if hasattr(j, "longitude") else j["longitude"]
     updates = {k: v for k, v in update_in.model_dump().items() if v is not None}
 
     if "latitude" in updates or "longitude" in updates:
-        lat = updates.get("latitude", j.latitude)
-        lon = updates.get("longitude", j.longitude)
+        lat = updates.get("latitude", j_lat)
+        lon = updates.get("longitude", j_lon)
         updates["location"] = {"type": "Point", "coordinates": [lon, lat]}
 
     if db_manager.is_connected:
-        await db_manager.db.junctions.update_one({"id": j.id}, {"$set": updates})
-        updated = await db_manager.db.junctions.find_one({"id": j.id})
+        await db_manager.db.junctions.update_one({"id": j_id}, {"$set": updates})
+        updated = await db_manager.db.junctions.find_one({"id": j_id})
     else:
         idx = next(
-            i for i, item in enumerate(db_manager.in_memory_store["junctions"]) if item["id"] == j.id
+            i for i, item in enumerate(db_manager.in_memory_store["junctions"]) if item["id"] == j_id
         )
         db_manager.in_memory_store["junctions"][idx].update(updates)
         updated = db_manager.in_memory_store["junctions"][idx]
